@@ -24,9 +24,15 @@ it lands:
   virtual-loss tree parallelization) — see `docs/batched_self_play.md`
   (`batched_mcts.py`, `batched_self_play.py`). Measured 3.97x more
   moves/sec than serial batch-size-1 self-play at the same 100
-  simulations/move. Not yet wired in as `run_training_loop`'s default
-  self-play path — a deliberate choice pending the scale-up
-  conversation, not started yet.
+  simulations/move.
+- **Full training loop wiring + evaluation (done):** batched self-play
+  is now `run_training_loop`'s default self-play step; simulations/move
+  raised to 100 (the real move-quality setting); checkpoint-vs-previous
+  and checkpoint-vs-random-baseline strength evaluation added — see
+  `docs/full_training_loop.md` (`evaluation.py`, `train.py` wiring).
+  Validated end-to-end at small scale. Real multi-hour scale-up
+  (games-per-iteration at real scale, whether evaluation needs
+  batching too) is a deliberate next decision — not started yet.
 
 ## GPU status — resolved
 

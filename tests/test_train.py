@@ -97,23 +97,35 @@ def test_run_training_loop_end_to_end_tiny_scale(tmp_path):
         checkpoint_dir=str(tmp_path / "checkpoints"),
         checkpoint_every_iterations=1,
         log_path=str(tmp_path / "logs" / "train_log.csv"),
+        eval_vs_previous_games=4,  # wiring test, not an eval-thoroughness test
     )
 
     history = run_training_loop(
         network, device, optimizer, buffer, self_play_config, train_config,
-        num_iterations=2, games_per_iteration=1, rng=np.random.default_rng(0),
+        num_iterations=2, games_per_iteration=2, rng=np.random.default_rng(0),
     )
 
     assert len(history) == 2
     for record in history:
         assert record["policy_loss"] is not None
         assert record["total_loss"] is not None
+        # min_buffer_size=1 -> training runs every iteration -> vs-previous
+        # eval should run every iteration too (new weights each time).
+        assert record["eval_vs_previous_new_win_rate"] is not None
+        assert record["eval_vs_previous_games"] == train_config.eval_vs_previous_games
 
     checkpoints = list((tmp_path / "checkpoints").glob("*.pt"))
     assert len(checkpoints) == 2
 
-    log_lines = (tmp_path / "logs" / "train_log.csv").read_text().strip().splitlines()
+    log_path = tmp_path / "logs" / "train_log.csv"
+    log_lines = log_path.read_text().strip().splitlines()
     assert len(log_lines) == 3  # header + 2 iterations
+    header = log_lines[0].split(",")
+    for expected_field in (
+        "eval_vs_previous_new_win_rate", "eval_vs_previous_draw_rate",
+        "eval_vs_random_win_rate", "eval_vs_random_games",
+    ):
+        assert expected_field in header
 
 
 def test_run_training_loop_skips_training_below_min_buffer_size(tmp_path):
@@ -136,6 +148,74 @@ def test_run_training_loop_skips_training_below_min_buffer_size(tmp_path):
         num_iterations=1, games_per_iteration=1, rng=np.random.default_rng(0),
     )
     assert history[0]["policy_loss"] is None
+    # No training happened -> "new" and "old" would be identical -> skip
+    # the vs-previous eval rather than spending time on a meaningless comparison.
+    assert history[0]["eval_vs_previous_new_win_rate"] is None
+
+
+def test_eval_vs_random_only_runs_on_cadence_iterations(tmp_path):
+    torch.manual_seed(0)
+    network = PolicyValueNet()
+    device = torch.device("cpu")
+    optimizer = torch.optim.Adam(network.parameters(), lr=1e-3)
+    buffer = ReplayBuffer(capacity=500)
+
+    self_play_config = SelfPlayConfig(num_simulations=5, temperature=0.0, temperature_threshold_plies=0)
+    train_config = TrainConfig(
+        batch_size=4,
+        train_steps_per_iteration=2,
+        min_buffer_size=1,
+        checkpoint_dir=str(tmp_path / "checkpoints"),
+        log_path=str(tmp_path / "logs" / "train_log.csv"),
+        eval_vs_previous_games=2,
+        eval_vs_random_games=2,
+        eval_vs_random_every_iterations=2,
+    )
+
+    history = run_training_loop(
+        network, device, optimizer, buffer, self_play_config, train_config,
+        num_iterations=2, games_per_iteration=2, rng=np.random.default_rng(0),
+    )
+
+    assert history[0]["eval_vs_random_win_rate"] is None  # iteration 0: not a multiple of 2
+    assert history[1]["eval_vs_random_win_rate"] is not None  # iteration 1 -> (1+1)=2, matches cadence
+    assert history[1]["eval_vs_random_games"] == 2
+
+
+def test_run_training_loop_uses_batched_self_play(tmp_path, monkeypatch):
+    """Regression guard: run_training_loop must call the batched self-
+    play path, not the serial one, per the throughput fix being wired
+    in as the default."""
+    import training.train as train_module
+
+    calls = []
+    original = train_module.run_batched_self_play
+
+    def spy(*args, **kwargs):
+        calls.append(kwargs.get("leaves_per_tree_per_round"))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(train_module, "run_batched_self_play", spy)
+
+    network = PolicyValueNet()
+    device = torch.device("cpu")
+    optimizer = torch.optim.Adam(network.parameters(), lr=1e-3)
+    buffer = ReplayBuffer(capacity=200)
+    self_play_config = SelfPlayConfig(num_simulations=5, temperature=0.0, temperature_threshold_plies=0)
+    train_config = TrainConfig(
+        batch_size=4, train_steps_per_iteration=2, min_buffer_size=1,
+        checkpoint_dir=str(tmp_path / "checkpoints"),
+        log_path=str(tmp_path / "logs" / "train_log.csv"),
+        leaves_per_tree_per_round=3,
+    )
+
+    run_training_loop(
+        network, device, optimizer, buffer, self_play_config, train_config,
+        num_iterations=1, games_per_iteration=2, rng=np.random.default_rng(0),
+    )
+
+    assert len(calls) == 1
+    assert calls[0] == 3  # leaves_per_tree_per_round threaded through correctly
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires a CUDA-capable GPU")

@@ -31,8 +31,9 @@ from training.train import TrainConfig, run_training_loop
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--iterations", type=int, default=2)
-    parser.add_argument("--games-per-iteration", type=int, default=2)
-    parser.add_argument("--simulations", type=int, default=20, help="MCTS simulations per move")
+    parser.add_argument("--games-per-iteration", type=int, default=8, help="also N, concurrent games/trees")
+    parser.add_argument("--simulations", type=int, default=100, help="MCTS simulations per move")
+    parser.add_argument("--leaves-per-tree", type=int, default=4, help="virtual-loss batching depth per tree")
     parser.add_argument("--c-puct", type=float, default=1.5)
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--temperature-plies", type=int, default=30)
@@ -47,6 +48,9 @@ def main():
     parser.add_argument("--checkpoint-every", type=int, default=1)
     parser.add_argument("--buffer-path", type=str, default="data/self_play_buffer.npz")
     parser.add_argument("--log-path", type=str, default="logs/train_log.csv")
+    parser.add_argument("--eval-vs-previous-games", type=int, default=10)
+    parser.add_argument("--eval-vs-random-games", type=int, default=10)
+    parser.add_argument("--eval-vs-random-every", type=int, default=5)
     parser.add_argument("--resume", type=str, default=None, help="checkpoint path to resume from")
     parser.add_argument("--load-buffer", type=str, default=None, help="existing replay buffer .npz to preload")
     parser.add_argument("--seed", type=int, default=0)
@@ -89,10 +93,15 @@ def main():
         checkpoint_every_iterations=args.checkpoint_every,
         buffer_path=args.buffer_path,
         log_path=args.log_path,
+        leaves_per_tree_per_round=args.leaves_per_tree,
+        eval_vs_previous_games=args.eval_vs_previous_games,
+        eval_vs_random_games=args.eval_vs_random_games,
+        eval_vs_random_every_iterations=args.eval_vs_random_every,
     )
 
     print(
-        f"running {args.iterations} iterations: {args.games_per_iteration} games/iter, "
+        f"running {args.iterations} iterations: {args.games_per_iteration} games/iter "
+        f"(leaves_per_tree_per_round={args.leaves_per_tree}), "
         f"{args.simulations} simulations/move, {args.train_steps} train steps/iter\n"
     )
     history = run_training_loop(
