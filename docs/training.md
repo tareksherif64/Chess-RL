@@ -12,7 +12,8 @@ it lands:
 
 - **Stage 1 (done):** policy/value network — see `docs/network.md`
   (`network.py`, `tensors.py`, `device.py`).
-- **Stage 2:** MCTS guided by the network — not started.
+- **Stage 2 (done):** MCTS guided by the network — see `docs/mcts.md`
+  (`mcts.py`).
 - **Stage 3:** self-play data generation / replay buffer — not started.
 - **Stage 4:** training loop + checkpointing + logging — not started.
 
