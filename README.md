@@ -10,7 +10,8 @@ engine/     ChessEnv (Gymnasium-style) + board/move tensor encoding
 agents/     Baseline agents (random for now; neural comes later)
 training/   Empty — RL training loop comes later
 tests/      pytest suite validating engine correctness against python-chess
-scripts/    Runnable validation scripts (random-vs-random self-play)
+scripts/    Runnable entry points (self-play stats, CLI watcher, GUI watcher)
+gui/        Tkinter desktop app for watching self-play live
 docs/       One note per module: responsibilities + dependencies
 ```
 
@@ -36,6 +37,13 @@ python -m pytest -v
 
 ```
 python scripts/self_play_random.py --games 100
+```
+
+## Watch the bots play
+
+```
+python scripts/watch_random_game.py       # terminal
+python scripts/gui_random_vs_random.py    # desktop GUI (tkinter)
 ```
 
 ## Status
