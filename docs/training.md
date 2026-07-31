@@ -14,7 +14,8 @@ it lands:
   (`network.py`, `tensors.py`, `device.py`).
 - **Stage 2 (done):** MCTS guided by the network — see `docs/mcts.md`
   (`mcts.py`).
-- **Stage 3:** self-play data generation / replay buffer — not started.
+- **Stage 3 (done):** self-play data generation / replay buffer — see
+  `docs/self_play.md` (`self_play.py`, `replay_buffer.py`).
 - **Stage 4:** training loop + checkpointing + logging — not started.
 
 ## GPU status — resolved

@@ -62,12 +62,34 @@ class MCTS:
         self.c_puct = c_puct
         self.claim_draw = claim_draw
 
-    def run(self, board: chess.Board, num_simulations: int) -> MCTSNode:
+    def run(
+        self,
+        board: chess.Board,
+        num_simulations: int,
+        add_dirichlet_noise: bool = False,
+        dirichlet_alpha: float = 0.3,
+        dirichlet_epsilon: float = 0.25,
+        rng: Optional[np.random.Generator] = None,
+    ) -> MCTSNode:
         """Run `num_simulations` PUCT simulations from `board`'s current
         position and return the root node (its children's visit_count
-        is the search-improved policy signal)."""
+        is the search-improved policy signal).
+
+        `add_dirichlet_noise` mixes Dirichlet(alpha) noise into the
+        root's priors right after expansion (off by default — this is
+        an AlphaZero self-play exploration technique, not a search-
+        correctness one; Stage 2's tests rely on it being off so the
+        search is deterministic given a fixed network)."""
         root = MCTSNode(parent=None, prior=1.0)
         self._evaluate_and_expand(root, board)
+
+        if add_dirichlet_noise and root.children:
+            rng = rng or np.random.default_rng()
+            actions = list(root.children.keys())
+            noise = rng.dirichlet([dirichlet_alpha] * len(actions))
+            for action, n in zip(actions, noise):
+                child = root.children[action]
+                child.prior = (1 - dirichlet_epsilon) * child.prior + dirichlet_epsilon * n
 
         for _ in range(num_simulations):
             node = root

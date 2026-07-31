@@ -120,6 +120,27 @@ def test_visit_count_policy_temperature_zero_is_one_hot():
     assert (policy == 1.0).sum() == 1
 
 
+def test_dirichlet_noise_perturbs_root_priors_but_stays_a_distribution():
+    torch.manual_seed(0)
+    network = PolicyValueNet()
+    network.eval()
+    device = torch.device("cpu")
+    board = chess.Board()
+
+    root_plain = MCTS(network, device=device).run(board, num_simulations=1)
+    root_noisy = MCTS(network, device=device).run(
+        board, num_simulations=1, add_dirichlet_noise=True, rng=np.random.default_rng(0)
+    )
+
+    plain_priors = {a: c.prior for a, c in root_plain.children.items()}
+    noisy_priors = {a: c.prior for a, c in root_noisy.children.items()}
+    assert plain_priors.keys() == noisy_priors.keys()
+    assert any(abs(plain_priors[a] - noisy_priors[a]) > 1e-9 for a in plain_priors)
+
+    total = sum(noisy_priors.values())
+    assert np.isclose(total, 1.0, atol=1e-4)
+
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires a CUDA-capable GPU")
 def test_mcts_runs_end_to_end_on_cuda():
     device = resolve_device(require_cuda=True)

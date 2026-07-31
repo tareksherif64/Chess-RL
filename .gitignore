@@ -7,3 +7,9 @@ venv/
 .vscode/
 .idea/
 *.log
+
+# generated self-play data / checkpoints — regenerable, not source
+data/
+checkpoints/
+*.npz
+*.pt
