@@ -49,6 +49,62 @@ def terminal_value(board: chess.Board, claim_draw: bool) -> float:
     return 1.0 if outcome.winner == board.turn else -1.0
 
 
+def select_child(node: MCTSNode, c_puct: float) -> tuple[int, MCTSNode]:
+    """PUCT selection: argmax over children of Q(s,a) + U(s,a). Shared
+    by both `MCTS` (serial, one tree) and `BatchedMCTS` (many trees,
+    batched leaf evaluation) — same selection logic either way, see
+    docs/batched_self_play.md."""
+    parent_visits_sqrt = math.sqrt(max(node.visit_count, 1))
+    best_score = -float("inf")
+    best_action, best_child = None, None
+
+    for action, child in node.children.items():
+        q = -child.value
+        u = c_puct * child.prior * parent_visits_sqrt / (1 + child.visit_count)
+        score = q + u
+        if score > best_score:
+            best_score, best_action, best_child = score, action, child
+
+    return best_action, best_child
+
+
+def backup(search_path: list[MCTSNode], value: float) -> None:
+    """Propagate `value` (from the leaf's own to-move perspective) up
+    to the root, flipping sign every ply. Shared by `MCTS` and
+    `BatchedMCTS`, and also reused (with a placeholder value) by
+    `BatchedMCTS`'s virtual-loss mechanism — see docs/batched_self_play.md."""
+    for node in reversed(search_path):
+        node.visit_count += 1
+        node.value_sum += value
+        value = -value
+
+
+def expand_children(node: MCTSNode, board: chess.Board, probs: np.ndarray) -> None:
+    """Attach one child per legal move to `node`, with prior = the
+    network's probability for that action. Shared by `MCTS` (single
+    position) and `BatchedMCTS` (called once per position in a batch)."""
+    for move in board.legal_moves:
+        action = encode_move(move)
+        node.children[action] = MCTSNode(parent=node, prior=float(probs[action]))
+
+
+def apply_dirichlet_noise(
+    root: MCTSNode, alpha: float, epsilon: float, rng: np.random.Generator
+) -> None:
+    """Mix Dirichlet(alpha) noise into the root's priors in place — an
+    AlphaZero self-play exploration technique, not a search-correctness
+    one (off by default in both `MCTS.run` and `BatchedMCTS.run_batch`;
+    Stage 2's tests rely on it being off so search is deterministic
+    given a fixed network)."""
+    if not root.children:
+        return
+    actions = list(root.children.keys())
+    noise = rng.dirichlet([alpha] * len(actions))
+    for action, n in zip(actions, noise):
+        child = root.children[action]
+        child.prior = (1 - epsilon) * child.prior + epsilon * n
+
+
 class MCTS:
     def __init__(
         self,
@@ -85,11 +141,7 @@ class MCTS:
 
         if add_dirichlet_noise and root.children:
             rng = rng or np.random.default_rng()
-            actions = list(root.children.keys())
-            noise = rng.dirichlet([dirichlet_alpha] * len(actions))
-            for action, n in zip(actions, noise):
-                child = root.children[action]
-                child.prior = (1 - dirichlet_epsilon) * child.prior + dirichlet_epsilon * n
+            apply_dirichlet_noise(root, dirichlet_alpha, dirichlet_epsilon, rng)
 
         for _ in range(num_simulations):
             node = root
@@ -97,7 +149,7 @@ class MCTS:
             search_path = [node]
 
             while node.expanded:
-                action, node = self._select_child(node)
+                action, node = select_child(node, self.c_puct)
                 sim_board.push(decode_move(action, sim_board))
                 search_path.append(node)
 
@@ -106,23 +158,9 @@ class MCTS:
             else:
                 value = self._evaluate_and_expand(node, sim_board)
 
-            self._backup(search_path, value)
+            backup(search_path, value)
 
         return root
-
-    def _select_child(self, node: MCTSNode) -> tuple[int, MCTSNode]:
-        parent_visits_sqrt = math.sqrt(max(node.visit_count, 1))
-        best_score = -float("inf")
-        best_action, best_child = None, None
-
-        for action, child in node.children.items():
-            q = -child.value
-            u = self.c_puct * child.prior * parent_visits_sqrt / (1 + child.visit_count)
-            score = q + u
-            if score > best_score:
-                best_score, best_action, best_child = score, action, child
-
-        return best_action, best_child
 
     def _evaluate_and_expand(self, node: MCTSNode, board: chess.Board) -> float:
         """Run the network on `board`, attach one child per legal move
@@ -139,19 +177,9 @@ class MCTS:
             probs = masked_softmax(policy_logits, mask)
 
         probs = probs[0].cpu().numpy()
-
-        for move in board.legal_moves:
-            action = encode_move(move)
-            node.children[action] = MCTSNode(parent=node, prior=float(probs[action]))
+        expand_children(node, board, probs)
 
         return float(value.item())
-
-    @staticmethod
-    def _backup(search_path: list[MCTSNode], value: float) -> None:
-        for node in reversed(search_path):
-            node.visit_count += 1
-            node.value_sum += value
-            value = -value
 
 
 def visit_count_policy(

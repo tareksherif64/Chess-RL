@@ -20,6 +20,13 @@ it lands:
   `docs/train.md` (`train.py`, `checkpoint.py`, `logger.py`). Confirmed
   working end-to-end at small scale; real multi-hour scale-up is a
   deliberate next decision, not started yet.
+- **Throughput fix (done):** batched self-play (N concurrent games,
+  virtual-loss tree parallelization) — see `docs/batched_self_play.md`
+  (`batched_mcts.py`, `batched_self_play.py`). Measured 3.97x more
+  moves/sec than serial batch-size-1 self-play at the same 100
+  simulations/move. Not yet wired in as `run_training_loop`'s default
+  self-play path — a deliberate choice pending the scale-up
+  conversation, not started yet.
 
 ## GPU status — resolved
 

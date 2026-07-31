@@ -74,7 +74,7 @@ def play_self_play_game(
             rng=rng,
         )
         policy_target = visit_count_policy(root, temperature=temperature)
-        action = _sample_action(policy_target, temperature, rng)
+        action = sample_action(policy_target, temperature, rng)
 
         pending.append((obs, policy_target, mover))
         obs, _reward, terminated, truncated, info = env.step(action)
@@ -89,7 +89,7 @@ def play_self_play_game(
     winner = outcome.winner  # True=white, False=black, None=draw
 
     examples = [
-        ReplayExample(board=board, policy=policy, value=_outcome_value(winner, mover))
+        ReplayExample(board=board, policy=policy, value=outcome_value(winner, mover))
         for board, policy, mover in pending
     ]
 
@@ -142,13 +142,13 @@ def run_self_play(
     return summaries
 
 
-def _sample_action(policy: np.ndarray, temperature: float, rng: np.random.Generator) -> int:
+def sample_action(policy: np.ndarray, temperature: float, rng: np.random.Generator) -> int:
     if temperature == 0:
         return int(np.argmax(policy))
     return int(rng.choice(len(policy), p=policy))
 
 
-def _outcome_value(winner: bool | None, mover: bool) -> float:
+def outcome_value(winner: bool | None, mover: bool) -> float:
     if winner is None:
         return 0.0
     return 1.0 if winner == mover else -1.0
