@@ -103,6 +103,15 @@ that approximation than necessary when it isn't buying throughput.
   achieved throughput once a long run is actually going, not assumed
   in advance. Proposed for confirmation, not yet chosen unilaterally.
 
+  **Superseded — this table covers self-play only.** The validation
+  run below this table measured evaluation (serial at the time) taking
+  up to ~10x longer than self-play itself in some iterations — this
+  self-play-only budget significantly understates real iteration time.
+  See `docs/batched_evaluation.md`'s "Redoing the games-per-iteration
+  math" section for the corrected version, which adds evaluation's
+  (now batched, but still non-trivial and variable) wall-clock cost on
+  top of this table's self-play numbers.
+
 ## 3. Checkpoint-vs-previous and vs-random evaluation
 
 `training/evaluation.py` (new): `evaluate_checkpoints()` plays games

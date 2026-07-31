@@ -9,9 +9,12 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from training.batched_evaluation import (
+    run_batched_evaluate_against_random,
+    run_batched_evaluate_checkpoints,
+)
 from training.batched_self_play import run_batched_self_play
 from training.checkpoint import save_checkpoint
-from training.evaluation import evaluate_against_random, evaluate_checkpoints
 from training.logger import TrainingLogger
 from training.network import PolicyValueNet
 from training.replay_buffer import ReplayBuffer
@@ -30,16 +33,19 @@ class TrainConfig:
     checkpoint_every_iterations: int = 1
     buffer_path: str | None = None
     log_path: str = "logs/train_log.csv"
-    # Batched self-play execution (see training/batched_self_play.py,
-    # docs/batched_self_play.md) — games_per_iteration IS N, the number
-    # of concurrent games/trees; this controls the other batching axis.
+    # Batched execution — shared batching depth for both self-play
+    # (training/batched_self_play.py) and evaluation
+    # (training/batched_evaluation.py). games_per_iteration and
+    # eval_*_games each act as N (concurrent games/trees) for their
+    # respective batched call; this controls the other axis for both.
     leaves_per_tree_per_round: int = 4
-    # Strength evaluation (see training/evaluation.py) — loss going
-    # down doesn't prove the network plays better, these games are the
-    # ground-truth signal. vs-previous runs every iteration (skipped
-    # automatically if training itself was skipped that iteration,
-    # since "new" and "old" would be identical); vs-random runs every
-    # `eval_vs_random_every_iterations` iterations as a sanity floor.
+    # Strength evaluation (see training/batched_evaluation.py) — loss
+    # going down doesn't prove the network plays better, these games
+    # are the ground-truth signal. vs-previous runs every iteration
+    # (skipped automatically if training itself was skipped that
+    # iteration, since "new" and "old" would be identical); vs-random
+    # runs every `eval_vs_random_every_iterations` iterations as a
+    # sanity floor.
     eval_vs_previous_games: int = 10
     eval_vs_random_games: int = 10
     eval_vs_random_every_iterations: int = 5
@@ -171,12 +177,13 @@ def run_training_loop(
                 previous_network.eval()
 
                 eval_start = time.perf_counter()
-                eval_vs_previous = evaluate_checkpoints(
+                eval_vs_previous = run_batched_evaluate_checkpoints(
                     network, previous_network, device,
                     num_games=train_config.eval_vs_previous_games,
                     num_simulations=self_play_config.num_simulations,
                     c_puct=self_play_config.c_puct, claim_draw=self_play_config.claim_draw,
                     max_plies=self_play_config.max_plies,
+                    leaves_per_tree_per_round=train_config.leaves_per_tree_per_round,
                 )
                 eval_vs_previous_seconds = time.perf_counter() - eval_start
                 print(
@@ -190,13 +197,14 @@ def run_training_loop(
             eval_vs_random_seconds = 0.0
             if (iteration + 1) % train_config.eval_vs_random_every_iterations == 0:
                 eval_start = time.perf_counter()
-                eval_vs_random = evaluate_against_random(
+                eval_vs_random = run_batched_evaluate_against_random(
                     network, device,
                     num_games=train_config.eval_vs_random_games,
                     num_simulations=self_play_config.num_simulations,
                     rng=rng,
                     c_puct=self_play_config.c_puct, claim_draw=self_play_config.claim_draw,
                     max_plies=self_play_config.max_plies,
+                    leaves_per_tree_per_round=train_config.leaves_per_tree_per_round,
                 )
                 eval_vs_random_seconds = time.perf_counter() - eval_start
                 print(

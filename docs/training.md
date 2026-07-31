@@ -30,9 +30,22 @@ it lands:
   raised to 100 (the real move-quality setting); checkpoint-vs-previous
   and checkpoint-vs-random-baseline strength evaluation added — see
   `docs/full_training_loop.md` (`evaluation.py`, `train.py` wiring).
-  Validated end-to-end at small scale. Real multi-hour scale-up
-  (games-per-iteration at real scale, whether evaluation needs
-  batching too) is a deliberate next decision — not started yet.
+  Validated end-to-end at small scale. This step's validation found
+  evaluation (then serial) taking up to ~10x self-play's own time per
+  iteration — addressed next.
+- **Batched evaluation (done):** `run_batched_evaluate_checkpoints`/
+  `run_batched_evaluate_against_random` (`batched_evaluation.py`) split
+  each round's active eval games by which network needs to move,
+  running one `BatchedMCTS` call per network group. Measured 4.05x more
+  moves/sec than serial evaluation, matching self-play's speedup.
+  Wired in as `run_training_loop`'s default evaluation path. Also
+  surfaced a real, separate finding: evaluation's zero-noise
+  determinism makes its wall-clock highly variable game-to-game (a
+  10-ply repetition-trap draw and a 400+-ply decisive game are both
+  observed outcomes for the same two networks) — factored into a
+  corrected games-per-iteration estimate in `docs/batched_evaluation.md`,
+  since the earlier estimate assumed evaluation was free. Real
+  multi-hour scale-up is a deliberate next decision — not started yet.
 
 ## GPU status — resolved
 

@@ -218,6 +218,51 @@ def test_run_training_loop_uses_batched_self_play(tmp_path, monkeypatch):
     assert calls[0] == 3  # leaves_per_tree_per_round threaded through correctly
 
 
+def test_run_training_loop_uses_batched_evaluation(tmp_path, monkeypatch):
+    """Regression guard: run_training_loop must call the batched
+    evaluation path (training/batched_evaluation.py), not the serial
+    one (training/evaluation.py), for both vs-previous and vs-random —
+    per the throughput fix being wired in as the default."""
+    import training.train as train_module
+
+    checkpoint_calls = []
+    random_calls = []
+    original_checkpoints = train_module.run_batched_evaluate_checkpoints
+    original_random = train_module.run_batched_evaluate_against_random
+
+    def spy_checkpoints(*args, **kwargs):
+        checkpoint_calls.append(kwargs.get("leaves_per_tree_per_round"))
+        return original_checkpoints(*args, **kwargs)
+
+    def spy_random(*args, **kwargs):
+        random_calls.append(kwargs.get("leaves_per_tree_per_round"))
+        return original_random(*args, **kwargs)
+
+    monkeypatch.setattr(train_module, "run_batched_evaluate_checkpoints", spy_checkpoints)
+    monkeypatch.setattr(train_module, "run_batched_evaluate_against_random", spy_random)
+
+    network = PolicyValueNet()
+    device = torch.device("cpu")
+    optimizer = torch.optim.Adam(network.parameters(), lr=1e-3)
+    buffer = ReplayBuffer(capacity=200)
+    self_play_config = SelfPlayConfig(num_simulations=5, temperature=0.0, temperature_threshold_plies=0)
+    train_config = TrainConfig(
+        batch_size=4, train_steps_per_iteration=2, min_buffer_size=1,
+        checkpoint_dir=str(tmp_path / "checkpoints"),
+        log_path=str(tmp_path / "logs" / "train_log.csv"),
+        leaves_per_tree_per_round=3,
+        eval_vs_previous_games=2, eval_vs_random_games=2, eval_vs_random_every_iterations=1,
+    )
+
+    run_training_loop(
+        network, device, optimizer, buffer, self_play_config, train_config,
+        num_iterations=1, games_per_iteration=2, rng=np.random.default_rng(0),
+    )
+
+    assert len(checkpoint_calls) == 1 and checkpoint_calls[0] == 3
+    assert len(random_calls) == 1 and random_calls[0] == 3
+
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires a CUDA-capable GPU")
 def test_train_steps_actually_uses_cuda():
     device = resolve_device(require_cuda=True)
