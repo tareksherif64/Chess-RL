@@ -16,7 +16,10 @@ it lands:
   (`mcts.py`).
 - **Stage 3 (done):** self-play data generation / replay buffer — see
   `docs/self_play.md` (`self_play.py`, `replay_buffer.py`).
-- **Stage 4:** training loop + checkpointing + logging — not started.
+- **Stage 4 (done):** training loop + checkpointing + logging — see
+  `docs/train.md` (`train.py`, `checkpoint.py`, `logger.py`). Confirmed
+  working end-to-end at small scale; real multi-hour scale-up is a
+  deliberate next decision, not started yet.
 
 ## GPU status — resolved
 

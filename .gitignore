@@ -8,8 +8,9 @@ venv/
 .idea/
 *.log
 
-# generated self-play data / checkpoints — regenerable, not source
+# generated self-play data / checkpoints / logs — regenerable, not source
 data/
 checkpoints/
+logs/
 *.npz
 *.pt
