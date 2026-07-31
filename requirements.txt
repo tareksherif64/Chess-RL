@@ -3,8 +3,9 @@ gymnasium>=1.3.0
 numpy>=2.0
 pytest>=8.0
 
-# torch is required for the training phase (not used yet). Install the
-# CUDA build explicitly, e.g.:
+# torch is required from the training phase onward. Install the CUDA
+# build explicitly, e.g.:
 #   pip install torch --index-url https://download.pytorch.org/whl/cu124
 # `pip install torch` alone will give you the CPU-only build.
-torch>=2.9.0
+# Confirmed working here: torch 2.6.0+cu124 on an RTX 4060.
+torch>=2.6.0

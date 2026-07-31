@@ -6,32 +6,33 @@ depended_on_by: []
 
 # training/
 
-Empty on purpose — this is the RL phase, not built yet.
+Phase 2 of the project — AlphaZero-style self-play RL on top of the
+Phase 1 `ChessEnv`. Built in stages; see each stage's own doc note as
+it lands:
 
-## Known blocker for this phase
+- **Stage 1 (done):** policy/value network — see `docs/network.md`
+  (`network.py`, `tensors.py`, `device.py`).
+- **Stage 2:** MCTS guided by the network — not started.
+- **Stage 3:** self-play data generation / replay buffer — not started.
+- **Stage 4:** training loop + checkpointing + logging — not started.
 
-The installed `torch` in this environment is the **CPU-only build**
-(`2.9.1+cpu`). The machine has an NVIDIA RTX 4060 (8GB) with a driver
-supporting CUDA 13.2, so the GPU itself is not the problem — before any
-training loop is written, `torch` needs to be reinstalled with a CUDA
-build, e.g.:
+## GPU status — resolved
 
-```
-pip uninstall torch
-pip install torch --index-url https://download.pytorch.org/whl/cu124
-```
+Previously flagged: the installed `torch` was CPU-only (`2.9.1+cpu`).
+This is now resolved — `torch 2.6.0+cu124` is installed and confirmed
+working on the RTX 4060 (`torch.cuda.is_available() == True`,
+`torch.cuda.get_device_name(0) == "NVIDIA GeForce RTX 4060 Laptop GPU"`).
+`training/device.py::resolve_device()` is the single place training
+code asks for a device, and it raises rather than silently falling back
+to CPU if that ever regresses — see `docs/network.md`.
 
-(pick the `cuXXX` index matching a CUDA runtime <= the driver's 13.2
-support window; check https://pytorch.org for the current recommended
-index at install time).
-
-## Expected dependencies once this phase starts
+## Expected dependencies
 
 - `engine.chess_env.ChessEnv` for the environment.
-- `engine.encoding` constants (`ACTION_SPACE_SIZE = 4672`,
-  observation shape `(8, 8, 18)`) for network input/output layer sizing.
+- `engine.encoding` constants (`ACTION_SPACE_SIZE = 4672`, observation
+  shape `(8, 8, 18)`) for network input/output layer sizing.
 - `agents` baseline(s) as an opponent/sanity-check during early training.
 - Observations are already `float32` numpy arrays convertible to torch
   tensors via `torch.from_numpy(obs)` with no dtype cast — this was a
-  deliberate constraint on `engine/encoding.py` from the start, so this
-  phase shouldn't hit data-format friction moving batches to CUDA.
+  deliberate constraint on `engine/encoding.py` from Phase 1, and
+  `training/tensors.py` builds directly on it.
