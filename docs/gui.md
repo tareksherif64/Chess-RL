@@ -20,11 +20,21 @@ alternative to the terminal-only `scripts/watch_random_game.py`.
   `tk.after()`-scheduled ticks (not a blocking `while` loop, so the
   window stays responsive to the Play/Pause/Step/speed-slider
   controls), and updates `BoardCanvas` + status labels each ply.
+- **`human_vs_model_controller.py` / `human_vs_model_app.py`** — a
+  second, separate mode: play against a loaded checkpoint by clicking
+  the board, instead of watching two agents play each other. See
+  `docs/human_vs_model.md` for the full writeup. `board_view.py` was
+  extended (not replaced) to support this — `square_at()` for
+  click-to-square geometry and selected/legal-destination highlighting
+  — in a way that leaves `ChessWatcherApp` completely unaffected (the
+  new `draw()` parameters default to `None`, matching its existing
+  calls exactly).
 
-Entry point: `scripts/gui_random_vs_random.py`.
+Entry points:
 
 ```
-python scripts/gui_random_vs_random.py
+python scripts/gui_random_vs_random.py           # watch two random agents play
+python scripts/play_human_vs_model.py --checkpoint path/to/ckpt.pt   # play against a checkpoint
 ```
 
 ## Design choices & tradeoffs
