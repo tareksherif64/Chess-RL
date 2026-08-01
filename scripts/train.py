@@ -31,7 +31,13 @@ from training.train import TrainConfig, run_training_loop
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--iterations", type=int, default=2)
-    parser.add_argument("--games-per-iteration", type=int, default=8, help="also N, concurrent games/trees")
+    parser.add_argument("--games-per-iteration", type=int, default=8, help="total self-play games wanted per iteration")
+    parser.add_argument(
+        "--self-play-batch-size", type=int, default=None,
+        help="concurrent games per self-play batch (N); if less than --games-per-iteration, "
+             "runs multiple back-to-back batches at this (tested) concurrency instead of one "
+             "large untested batch. Default: equal to --games-per-iteration (single batch).",
+    )
     parser.add_argument("--simulations", type=int, default=100, help="MCTS simulations per move")
     parser.add_argument("--leaves-per-tree", type=int, default=4, help="virtual-loss batching depth per tree")
     parser.add_argument("--c-puct", type=float, default=1.5)
@@ -48,6 +54,10 @@ def main():
     parser.add_argument("--checkpoint-every", type=int, default=1)
     parser.add_argument("--buffer-path", type=str, default="data/self_play_buffer.npz")
     parser.add_argument("--log-path", type=str, default="logs/train_log.csv")
+    parser.add_argument(
+        "--error-log", type=str, default="logs/train_errors.log",
+        help="full tracebacks for any caught failure go here; pass '' to disable",
+    )
     parser.add_argument("--eval-vs-previous-games", type=int, default=10)
     parser.add_argument("--eval-vs-random-games", type=int, default=10)
     parser.add_argument("--eval-vs-random-every", type=int, default=5)
@@ -59,11 +69,15 @@ def main():
 
     device = resolve_device(require_cuda=not args.cpu)
     print(f"device: {device}")
+    if device.type == "cuda":
+        print(f"cuda device name: {torch.cuda.get_device_name(device)}")
+        print(f"cuda capability: {torch.cuda.get_device_capability(device)}")
 
     network = PolicyValueNet().to(device)
     optimizer = torch.optim.Adam(
         network.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay
     )
+    print(f"network device check: {next(network.parameters()).device}\n")
 
     start_iteration = 0
     if args.resume:
@@ -93,15 +107,18 @@ def main():
         checkpoint_every_iterations=args.checkpoint_every,
         buffer_path=args.buffer_path,
         log_path=args.log_path,
+        error_log_path=args.error_log or None,
         leaves_per_tree_per_round=args.leaves_per_tree,
+        self_play_batch_size=args.self_play_batch_size,
         eval_vs_previous_games=args.eval_vs_previous_games,
         eval_vs_random_games=args.eval_vs_random_games,
         eval_vs_random_every_iterations=args.eval_vs_random_every,
     )
 
+    effective_batch = args.self_play_batch_size or args.games_per_iteration
     print(
         f"running {args.iterations} iterations: {args.games_per_iteration} games/iter "
-        f"(leaves_per_tree_per_round={args.leaves_per_tree}), "
+        f"(self-play concurrency N={effective_batch}, leaves_per_tree_per_round={args.leaves_per_tree}), "
         f"{args.simulations} simulations/move, {args.train_steps} train steps/iter\n"
     )
     history = run_training_loop(
